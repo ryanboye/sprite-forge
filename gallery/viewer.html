@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HULLROT — Asset Library</title>
+<style>
+  :root { --amber: #ffb03a; --dim: #7a5a28; --bg: #0b0a08; --card: #14110c; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--amber); font-family: 'Courier New', monospace; padding: 18px; }
+  h1 { font-size: 20px; letter-spacing: 4px; margin-bottom: 4px; }
+  .sub { color: var(--dim); font-size: 11px; letter-spacing: 1px; margin-bottom: 14px; }
+  .filters { margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .filters button { background: var(--card); color: var(--dim); border: 1px solid #33291a; padding: 6px 12px;
+    font-family: inherit; font-size: 11px; letter-spacing: 2px; cursor: pointer; }
+  .filters button.on { color: var(--amber); border-color: var(--amber); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid #2a2114; padding: 10px; }
+  .card h3 { font-size: 13px; letter-spacing: 1px; margin-bottom: 2px; }
+  .card .meta { color: var(--dim); font-size: 10px; margin-bottom: 8px; min-height: 24px; }
+  .stage { width: 100%; aspect-ratio: 1; background:
+    repeating-conic-gradient(#1c1812 0% 25%, #241e15 0% 50%) 0 0 / 24px 24px; display: grid; place-items: center; overflow: hidden; }
+  .stage canvas, .stage img, .stage video { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  .cells { color: #4a3d24; font-size: 9px; letter-spacing: 1px; margin-top: 6px; }
+  .fb { display: flex; gap: 6px; margin-top: 8px; }
+  .fb input { flex: 1; background: #0e0c08; border: 1px solid #33291a; color: var(--amber);
+    font-family: inherit; font-size: 11px; padding: 7px; }
+  .fb button { background: #2b1f0d; border: 1px solid var(--amber); color: var(--amber);
+    font-family: inherit; font-size: 11px; letter-spacing: 1px; padding: 7px 12px; cursor: pointer; }
+  .fb button:disabled { opacity: 0.4; }
+  .sent { color: #9dff5a; font-size: 10px; margin-top: 4px; height: 12px; }
+</style>
+</head>
+<body>
+<h1>HULLROT — ASSET LIBRARY</h1>
+<div class="sub">every generated asset in one place · leave targeted feedback and it lands in BMO's channel</div>
+<div class="filters" id="filters"></div>
+<div class="grid" id="grid"></div>
+<script>
+const keyPx = (data) => { // the game's exact chroma keyer
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const m = Math.min(r, b) - g;
+    if (m > 52) data[i + 3] = 0;
+    else if (m > 18) { const k = (m - 18) * 0.8; data[i] = r - k; data[i + 2] = b - k; }
+  }
+};
+const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('404 ' + src)); i.src = src; });
+
+async function makeStage(a) {
+  const stage = document.createElement('div');
+  stage.className = 'stage';
+  if (a.type === 'video') {
+    const v = document.createElement('video');
+    v.src = a.src; v.controls = true; v.loop = true; v.muted = true;
+    stage.appendChild(v);
+    return stage;
+  }
+  if (a.type === 'art' || (a.type === 'sheet' && !a.chroma)) {
+    const i = document.createElement('img'); i.src = a.src; stage.appendChild(i);
+    return stage;
+  }
+  if (a.type === 'anim') { // frame-sequence loop (reload)
+    const imgs = await Promise.all(a.frames.map(loadImg));
+    const c = document.createElement('canvas');
+    c.width = 384; c.height = 384;
+    const x = c.getContext('2d');
+    let f = 0;
+    setInterval(() => {
+      x.clearRect(0, 0, 384, 384);
+      x.drawImage(imgs[f], 0, 0, 384, 384);
+      f = (f + 1) % imgs.length;
+    }, 1000 / (a.fps || 6));
+    stage.appendChild(c);
+    return stage;
+  }
+  const img = await loadImg(a.src);
+  if (a.type === 'sheet' || a.type === 'animsheet') {
+    // chroma-key the whole sheet onto the checkerboard
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0, 512, 512);
+    if (a.chroma) { const d = x.getImageData(0, 0, 512, 512); keyPx(d.data); x.putImageData(d, 0, 0); }
+    stage.appendChild(c);
+    if (a.type === 'animsheet') { // cycle the 4 cells in place
+      const play = document.createElement('canvas');
+      play.width = 256; play.height = 256;
+      const px = play.getContext('2d');
+      const half = img.width / 2;
+      let f = 0;
+      setInterval(() => {
+        const qx = f & 1, qy = (f >> 1) & 1;
+        px.clearRect(0, 0, 256, 256);
+        px.drawImage(img, qx * half, qy * half, half, half, 0, 0, 256, 256);
+        const d = px.getImageData(0, 0, 256, 256); keyPx(d.data); px.putImageData(d, 0, 0);
+        f = (f + 1) % 4;
+      }, 1000 / (a.fps || 6));
+      stage.replaceChildren(play);
+    }
+    return stage;
+  }
+  return stage;
+}
+
+fetch('manifest.json').then((r) => r.json()).then(async ({ assets }) => {
+  const grid = document.getElementById('grid');
+  const types = [...new Set(assets.map((a) => a.type))];
+  let active = 'all';
+  const fdiv = document.getElementById('filters');
+  const render = () => {
+    document.querySelectorAll('.card').forEach((c) => {
+      c.style.display = active === 'all' || c.dataset.type === active ? '' : 'none';
+    });
+    document.querySelectorAll('.filters button').forEach((b) => b.classList.toggle('on', b.dataset.t === active));
+  };
+  for (const t of ['all', ...types]) {
+    const b = document.createElement('button');
+    b.textContent = t.toUpperCase(); b.dataset.t = t;
+    b.onclick = () => { active = t; render(); };
+    fdiv.appendChild(b);
+  }
+  for (const a of assets) {
+    const card = document.createElement('div');
+    card.className = 'card'; card.dataset.type = a.type;
+    card.innerHTML = `<h3>${a.title}</h3><div class="meta">${a.note || ''}${a.cells ? '' : ''}</div>`;
+    try { card.appendChild(await makeStage(a)); } catch (e) { const err = document.createElement('div'); err.className = 'meta'; err.textContent = 'preview failed: ' + e.message; card.appendChild(err); }
+    if (a.cells) {
+      const cd = document.createElement('div');
+      cd.className = 'cells';
+      cd.textContent = 'cells: ' + a.cells.join(' · ');
+      card.appendChild(cd);
+    }
+    const fb = document.createElement('div'); fb.className = 'fb';
+    const inp = document.createElement('input'); inp.placeholder = 'tell BMO what to fix…';
+    const btn = document.createElement('button'); btn.textContent = 'SEND';
+    const sent = document.createElement('div'); sent.className = 'sent';
+    btn.onclick = async () => {
+      if (!inp.value.trim()) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch('api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset: a.id, title: a.title, text: inp.value.trim() }) });
+        sent.textContent = r.ok ? '✓ delivered to BMO' : '✗ failed — tell BMO in discord';
+        if (r.ok) inp.value = '';
+      } catch { sent.textContent = '✗ failed — tell BMO in discord'; }
+      btn.disabled = false;
+      setTimeout(() => { sent.textContent = ''; }, 4000);
+    };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.onclick(); });
+    fb.append(inp, btn); card.append(fb, sent);
+    grid.appendChild(card);
+  }
+  render();
+});
+</script>
+</body>
+</html>
