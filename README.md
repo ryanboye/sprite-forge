@@ -13,6 +13,7 @@ reload animation, and a 30-asset library.
 - `generators/gen-image.mjs` — gpt-image-2 text→image (`node gen-image.mjs "<prompt>"
   out.png [aspect]`). The obedience workhorse: sheets, grids, POV compositions.
 - `generators/scenario-gen.mjs` — Scenario.com flux txt2img (style/LoRA catalog).
+- `generators/gen-sfx.mjs` — ElevenLabs text-to-sound-effects (see forge/sound.md). The audio arm.
 - `generators/scenario-custom.mjs` — Scenario custom models: **video** (kling, veo3) and
   **3D** (hunyuan) via `/generate/custom/{modelId}`; handles asset upload + polling.
 - `forge/animate.md` — the full animation pipeline doc (hero → video → frames → repair
