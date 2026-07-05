@@ -19,9 +19,9 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-const env = process.env.SCENARIO_API_KEY ? '' : readFileSync(process.env.HOME + '/.env', 'utf8');
-const KEY = process.env.SCENARIO_API_KEY || env.match(/^SCENARIO_API_KEY=(.*)$/m)[1].trim();
-const SEC = process.env.SCENARIO_API_SECRET || env.match(/^SCENARIO_API_SECRET=(.*)$/m)[1].trim();
+import { loadKey } from './_env.mjs';
+const KEY = loadKey('SCENARIO_API_KEY');
+const SEC = loadKey('SCENARIO_API_SECRET');
 const AUTH = 'Basic ' + Buffer.from(`${KEY}:${SEC}`).toString('base64');
 const API = 'https://api.cloud.scenario.com/v1';
 const H = { Authorization: AUTH, 'Content-Type': 'application/json' };

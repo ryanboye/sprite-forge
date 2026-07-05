@@ -5,11 +5,11 @@
 //   node gen-sfx.mjs "punchy sci-fi plasma rifle shot, single, crisp" sfx/fire.mp3 1.2 0.6
 //
 // Key: ELEVENLABS_API_KEY from env, falling back to ~/.env.
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 
-const KEY = process.env.ELEVENLABS_API_KEY
-  || readFileSync(process.env.HOME + '/.env', 'utf8').match(/^ELEVENLABS_API_KEY=(.*)$/m)[1].trim().replace(/^["']|["']$/g, '');
+import { loadKey } from './_env.mjs';
+const KEY = loadKey('ELEVENLABS_API_KEY');
 
 const [prompt, out, dur, influence] = process.argv.slice(2);
 if (!prompt || !out) {

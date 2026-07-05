@@ -10,8 +10,8 @@ if (!prompt || !outfile) {
   process.exit(1);
 }
 
-const KEY = process.env.OPENAI_API_KEY
-  || readFileSync(process.env.HOME + '/.env', 'utf8').match(/^OPENAI_API_KEY=(.*)$/m)[1].trim().replace(/^["']|["']$/g, '');
+import { loadKey } from './_env.mjs';
+const KEY = loadKey('OPENAI_API_KEY');
 const SIZE = { '1:1': '1024x1024', '2:3': '1024x1536', '9:16': '1024x1536', '3:2': '1536x1024', '16:9': '1536x1024' }[aspect] ?? '1024x1024';
 
 const res = await fetch('https://api.openai.com/v1/images/generations', {

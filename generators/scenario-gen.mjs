@@ -3,16 +3,16 @@
 // modelId default: flux.1-dev. Size default 1024x1024.
 // Catalog: https://api.cloud.scenario.com/v1/models?privacy=public (flux game LoRAs).
 // Costs CUs from awfml's Scenario account. Keys in /home/claudebot/.env.
-import { readFileSync, writeFileSync, statSync } from 'fs';
+import { writeFileSync, statSync } from 'fs';
 
 const [prompt, outfile, modelId = 'flux.1-dev', size = '1024x1024'] = process.argv.slice(2);
 if (!prompt || !outfile) {
   console.error('usage: node scenario-gen.mjs "<prompt>" <out.png> [modelId] [WxH]');
   process.exit(1);
 }
-const env = process.env.SCENARIO_API_KEY ? '' : readFileSync(process.env.HOME + '/.env', 'utf8');
-const KEY = process.env.SCENARIO_API_KEY || env.match(/^SCENARIO_API_KEY=(.*)$/m)[1].trim();
-const SEC = process.env.SCENARIO_API_SECRET || env.match(/^SCENARIO_API_SECRET=(.*)$/m)[1].trim();
+import { loadKey } from './_env.mjs';
+const KEY = loadKey('SCENARIO_API_KEY');
+const SEC = loadKey('SCENARIO_API_SECRET');
 const AUTH = 'Basic ' + Buffer.from(`${KEY}:${SEC}`).toString('base64');
 const [w, h] = size.split('x').map(Number);
 const API = 'https://api.cloud.scenario.com/v1';
