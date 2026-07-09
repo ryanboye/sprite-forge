@@ -1,0 +1,255 @@
+<meta charset="utf-8">
+<title>actor-states — live demo</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0c0e14; color: #d7dbe6;
+    font: 14px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    padding: 22px; -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 19px; margin: 0 0 2px; letter-spacing: .5px; color: #eef1f8; }
+  h1 small { color: #6f7791; font-weight: 400; font-size: 12px; letter-spacing: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: #7c86a3; margin: 26px 0 10px; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .stage-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .panel { background: #12151e; border: 1px solid #232838; border-radius: 10px; padding: 14px; }
+  canvas { display: block; image-rendering: auto; }
+  #stage { border-radius: 8px; background:
+    repeating-conic-gradient(#171b26 0% 25%, #131721 0% 50%) 50% / 22px 22px; }
+  .hud { min-width: 210px; }
+  .hud .big { font-size: 26px; font-weight: 700; color: #7ee0a0; letter-spacing: 1px; text-transform: uppercase; }
+  .hud .big.dead { color: #e8637a; }
+  .hud dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 12px 0; }
+  .hud dt { color: #6f7791; } .hud dd { margin: 0; color: #cfd5e3; }
+  .btns { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; }
+  button {
+    font: inherit; font-size: 12px; color: #e7ebf5; background: #1e2333; cursor: pointer;
+    border: 1px solid #313850; border-radius: 6px; padding: 7px 11px; transition: .1s;
+  }
+  button:hover { background: #283150; border-color: #47527a; }
+  button.kill { border-color: #5c2733; color: #f0a2b0; }
+  button.kill:hover { background: #3a1b23; }
+  .log { margin-top: 10px; height: 74px; overflow: auto; font-size: 11px; color: #86e0a6;
+    background: #0a0d15; border: 1px solid #1d2333; border-radius: 6px; padding: 6px 8px; }
+  .log b { color: #ffd479; }
+  .vocab { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .vocab .cell { background: #12151e; border: 1px solid #232838; border-radius: 8px; padding: 8px; text-align: center; }
+  .vocab canvas { margin: 0 auto 6px; }
+  .vocab .name { color: #cfe0ff; font-weight: 700; font-size: 12px; }
+  .vocab .meta { color: #6f7791; font-size: 10px; margin-top: 2px; }
+  .vocab .flags { color: #7c86a3; font-size: 10px; margin-top: 3px; min-height: 13px; }
+  .vocab .flags .lk { color: #e8637a; } .vocab .flags .ev { color: #ffd479; }
+  .strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .strip .cell { background: #12151e; border: 1px solid #232838; border-radius: 8px; padding: 6px; text-align: center; }
+  .strip canvas { margin: 0 auto 4px; }
+  .strip .lbl { color: #8fa0c8; font-size: 10px; }
+  .strip .lbl b { color: #cfe0ff; }
+  p.note { color: #6f7791; font-size: 12px; margin: 6px 0 0; }
+  code { color: #9fd0ff; }
+</style>
+<div class="wrap">
+  <h1>actor-states <small>— a Doom-style sprite state machine, driven by a JSON table</small></h1>
+  <p class="note">The husk below is one <code>createActor(table)</code>. Buttons emit game <b>signals</b>; the runtime owns the frames, timing, events, priorities &amp; locking. Art: HULLROT choir-husk (state machine) &amp; STARFRAG trooper (rotations).</p>
+
+  <h2>Live actor — patrol + signals</h2>
+  <div class="stage-row">
+    <div class="panel" style="padding:0; overflow:hidden">
+      <canvas id="stage" width="560" height="300"></canvas>
+    </div>
+    <div class="panel hud">
+      <div class="big" id="stateName">—</div>
+      <dl>
+        <dt>frame</dt><dd id="frameId">—</dd>
+        <dt>index</dt><dd id="frameIdx">—</dd>
+        <dt>locked</dt><dd id="lockedFlag">—</dd>
+      </dl>
+      <div class="btns">
+        <button data-sig="sawPlayer">see → walk</button>
+        <button data-sig="inRange">inRange → attack</button>
+        <button data-sig="damaged">damage → pain</button>
+        <button data-sig="died" class="kill">kill → death</button>
+        <button data-reset="1">revive</button>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <h2>State vocabulary — the whole table at a glance</h2>
+  <div class="vocab" id="vocab"></div>
+
+  <h2>rotationFrame — 8 view angles → 8 billboards (turntable)</h2>
+  <div class="strip" id="strip"></div>
+  <p class="note">Each cell calls <code>actor.rotationFrame(actorAngle, viewAngle, 8)</code>; the returned index selects the trooper billboard the camera sees.</p>
+</div>
+
+<script type="module">
+import { createActor } from './actor-states.mjs';
+import { bindManifest } from './validate.mjs';
+
+const SHOT = new URLSearchParams(location.search).has('shot');
+
+// ---- tiny asset loader with sprite-forge magenta chroma-key ----------------
+function keyImage(img) {
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data;
+  for (let i = 0; i < p.length; i += 4) {
+    // key on solid magenta: min(r,b) - g > 52  (matches the pipeline keyer)
+    if (Math.min(p[i], p[i + 2]) - p[i + 1] > 52) p[i + 3] = 0;
+  }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+const loadImg = (src) => new Promise((res, rej) => {
+  const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src;
+});
+async function loadKeyed(src) { return keyImage(await loadImg(src)); }
+function tint(canvas, rgba) {
+  const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+  const x = c.getContext('2d');
+  x.drawImage(canvas, 0, 0);
+  x.globalCompositeOperation = 'source-atop';
+  x.fillStyle = rgba; x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+const $ = (id) => document.getElementById(id);
+
+async function main() {
+  const [table, manifest] = await Promise.all([
+    fetch('./demo-assets/husk.states.json').then((r) => r.json()),
+    fetch('./demo-assets/manifest.json').then((r) => r.json()),
+  ]);
+  const bound = bindManifest(table, manifest);
+
+  // husk frames (keyed canvases) + their manifest meta (w/h/anchor)
+  const FR = {};
+  for (const id of bound.ids) {
+    const m = bound.frame(id);
+    FR[id] = { canvas: await loadKeyed('./demo-assets/' + m.file), w: m.w, h: m.h, anchor: m.anchor };
+  }
+  // trooper 8-way billboards (magenta -> keyed)
+  const DIRS_BY_ROT = ['', '_se', '_e', '_ne', '_n', '_nw', '_w', '_sw'] // smooth turntable
+    .map((s) => './demo-assets/trooper' + s + '.png');
+  const TR = await Promise.all(DIRS_BY_ROT.map(loadKeyed));
+
+  // ---- the actor -----------------------------------------------------------
+  let flashUntil = 0;
+  const logEl = $('log');
+  const log = (html) => { logEl.insertAdjacentHTML('afterbegin', html + '<br>'); };
+  const actor = createActor(bound.table, {
+    onEvent(name, ctx) {
+      if (name === 'dealDamage') { flashUntil = performance.now() + 170; }
+      log(`<b>event</b> ${name} @ ${ctx.state}[${ctx.frameIndex}]`);
+    },
+  });
+
+  // ---- stage: patrol -------------------------------------------------------
+  const cv = $('stage'), ctx = cv.getContext('2d');
+  const GROUND = 250, SCALE = 0.62, SPEED = 70;
+  let px = 150, dir = 1, t0 = performance.now();
+
+  function drawBillboard(g, x, gy, scale, flip, flashing) {
+    const dw = g.w * scale, dh = g.h * scale;
+    const [ax, ay] = g.anchor;
+    ctx.save();
+    ctx.translate(x, gy);
+    if (flip) ctx.scale(-1, 1);
+    const dx = -ax * scale, dy = -ay * scale;
+    ctx.drawImage(g.canvas, dx, dy, dw, dh);
+    if (flashing) ctx.drawImage(tint(g.canvas, 'rgba(255,70,80,0.55)'), dx, dy, dw, dh);
+    ctx.restore();
+  }
+
+  function render(now) {
+    const st = actor.state();
+    // patrol only while walking
+    if (st === 'walk') { px += dir * SPEED * (1 / 60); if (px > 470) { px = 470; dir = -1; } if (px < 90) { px = 90; dir = 1; } }
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    // ground line
+    ctx.strokeStyle = '#2a3247'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(20, GROUND + 1); ctx.lineTo(540, GROUND + 1); ctx.stroke();
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(px, GROUND, 34 * SCALE + 6, 7, 0, 0, Math.PI * 2); ctx.fill();
+    // bob while walking
+    const bob = st === 'walk' ? -Math.abs(Math.sin(now / 90)) * 6 : 0;
+    const g = FR[actor.frame()];
+    const flashing = st === 'pain' || now < flashUntil;
+    drawBillboard(g, px, GROUND + bob, SCALE, dir < 0, flashing);
+
+    // HUD
+    $('stateName').textContent = st;
+    $('stateName').className = 'big' + (st === 'death' || st === 'corpse' ? ' dead' : '');
+    $('frameId').textContent = actor.frame();
+    $('frameIdx').textContent = actor.frameIndex();
+    $('lockedFlag').textContent = actor.isLocked() ? 'yes (uninterruptible)' : 'no';
+  }
+
+  let raf;
+  function loop(now) { actor.update(1 / 60); render(now); raf = requestAnimationFrame(loop); }
+
+  // buttons
+  document.querySelectorAll('button[data-sig]').forEach((b) =>
+    b.addEventListener('click', () => { const ok = actor.signal(b.dataset.sig); log(`<span style="color:#6f7791">signal</span> ${b.dataset.sig} → ${ok ? actor.state() : 'ignored'}`); }));
+  document.querySelector('button[data-reset]').addEventListener('click', () => { actor.set(actor.table.start, { force: true }); px = 150; dir = 1; log('<span style="color:#6f7791">revive</span>'); });
+
+  // ---- state vocabulary strip ---------------------------------------------
+  const repFrame = { idle: 'idle', walk: 'walk', attack: 'attack', pain: 'idle', death: 'dead', corpse: 'dead' };
+  const vocab = $('vocab');
+  for (const [name, s] of Object.entries(table.states)) {
+    const g = FR[repFrame[name] || s.frames[0]];
+    const cell = document.createElement('div'); cell.className = 'cell';
+    const mc = document.createElement('canvas'); mc.width = 84; mc.height = 96;
+    const mx = mc.getContext('2d');
+    const sc = Math.min(72 / g.w, 88 / g.h);
+    const painTint = name === 'pain';
+    mx.drawImage(g.canvas, 42 - (g.w * sc) / 2, 92 - g.h * sc, g.w * sc, g.h * sc);
+    if (painTint) mx.drawImage(tint(g.canvas, 'rgba(255,70,80,0.55)'), 42 - (g.w * sc) / 2, 92 - g.h * sc, g.w * sc, g.h * sc);
+    cell.appendChild(mc);
+    const flags = [];
+    if (s.loop) flags.push('<span>loop</span>');
+    if (s.next) flags.push(`→${s.next}`);
+    if (s.events) flags.push(`<span class="ev">event@${Object.keys(s.events).join(',')}</span>`);
+    if (s.locked) flags.push('<span class="lk">locked</span>');
+    cell.insertAdjacentHTML('beforeend',
+      `<div class="name">${name}</div><div class="meta">${s.fps ?? bound.fps}fps · ${s.frames.length}f</div><div class="flags">${flags.join(' ')}</div>`);
+    vocab.appendChild(cell);
+  }
+
+  // ---- rotationFrame turntable --------------------------------------------
+  const strip = $('strip');
+  const TAU = Math.PI * 2, step = TAU / 8;
+  for (let k = 0; k < 8; k++) {
+    // choose a view angle that makes rotationFrame return index k, proving the fn drives it
+    const viewAngle = ((8 - k) % 8) * step;
+    const rot = actor.rotationFrame(0, viewAngle, 8); // === k
+    const cell = document.createElement('div'); cell.className = 'cell';
+    const rc = document.createElement('canvas'); rc.width = 84; rc.height = 100;
+    const rx = rc.getContext('2d');
+    const img = TR[rot]; const sc = Math.min(76 / img.width, 96 / img.height);
+    rx.drawImage(img, 42 - (img.width * sc) / 2, 98 - img.height * sc, img.width * sc, img.height * sc);
+    cell.appendChild(rc);
+    cell.insertAdjacentHTML('beforeend', `<div class="lbl">view ${Math.round((viewAngle * 180) / Math.PI)}° → <b>rot ${rot}</b></div>`);
+    strip.appendChild(cell);
+  }
+
+  // ---- run -----------------------------------------------------------------
+  if (SHOT) {
+    // deterministic hero frame: walking, mid-stride, mid-stage
+    actor.signal('sawPlayer');
+    px = 250; dir = 1;
+    let guard = 0;
+    while (actor.frame() !== 'walk' && guard++ < 200) actor.update(1 / 60);
+    render(performance.now());
+    window.__ready = true;
+  } else {
+    raf = requestAnimationFrame(loop);
+    window.__ready = true;
+  }
+}
+main();
+</script>

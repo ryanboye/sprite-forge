@@ -1,0 +1,12 @@
+{
+  "set": "husk",
+  "generator": "sprite-forge (HULLROT choir-husk frames, downscaled for the demo)",
+  "anchor": "feet",
+  "suggested": { "fps": 8 },
+  "frames": {
+    "idle":   { "file": "husk_idle.png",   "w": 130, "h": 220, "anchor": [65, 220] },
+    "walk":   { "file": "husk_walk.png",   "w": 117, "h": 220, "anchor": [58, 220] },
+    "attack": { "file": "husk_attack.png", "w": 208, "h": 220, "anchor": [104, 220] },
+    "dead":   { "file": "husk_dead.png",   "w": 412, "h": 220, "anchor": [206, 220] }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "start": "idle",
+  "fps": 8,
+  "priorities": { "death": 100, "pain": 50, "attack": 10, "walk": 1, "idle": 0 },
+  "transitions": {
+    "sawPlayer": "walk",
+    "inRange": "attack",
+    "damaged": "pain",
+    "died": "death"
+  },
+  "states": {
+    "idle":   { "frames": ["idle"],           "fps": 2,  "loop": true },
+    "walk":   { "frames": ["idle", "walk"],   "fps": 6,  "loop": true },
+    "attack": { "frames": ["idle", "attack"], "fps": 8,  "next": "walk", "events": { "1": "dealDamage" } },
+    "pain":   { "frames": ["idle"],           "fps": 12, "next": "@prev", "interrupts": true },
+    "death":  { "frames": ["dead"],           "fps": 6,  "next": "corpse", "locked": true },
+    "corpse": { "frames": ["dead"],           "fps": 0,  "locked": true }
+  }
+}
